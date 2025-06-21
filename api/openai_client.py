@@ -50,6 +50,19 @@ from adalflow.core.types import (
 )
 from adalflow.components.model_client.utils import parse_embedding_response
 
+# Импортируем конфигурацию для vLLM
+try:
+    from .vllm_config import VLLM_INCOMPATIBLE_PARAMS, log_vllm_request
+except ImportError:
+    # Fallback если файл не найден
+    VLLM_INCOMPATIBLE_PARAMS = [
+        'logprobs', 'top_logprobs', 'response_format', 'tools', 
+        'tool_choice', 'function_call', 'functions', 'seed', 
+        'logit_bias', 'user', 'presence_penalty', 'frequency_penalty'
+    ]
+    def log_vllm_request(api_kwargs):
+        pass
+
 log = logging.getLogger(__name__)
 T = TypeVar("T")
 
@@ -166,6 +179,8 @@ class OpenAIClient(ModelClient):
         base_url: Optional[str] = None,
         env_base_url_name: str = "OPENAI_BASE_URL",
         env_api_key_name: str = "OPENAI_API_KEY",
+        force_streaming: bool = False,
+        vllm_compatible: bool = True,
     ):
         r"""It is recommended to set the OPENAI_API_KEY environment variable instead of passing it as an argument.
 
@@ -173,12 +188,15 @@ class OpenAIClient(ModelClient):
             api_key (Optional[str], optional): OpenAI API key. Defaults to None.
             base_url (str): The API base URL to use when initializing the client.
             env_api_key_name (str): The environment variable name for the API key. Defaults to `"OPENAI_API_KEY"`.
+            force_streaming (bool): Whether to force all LLM calls to use streaming. Defaults to False.
+            vllm_compatible (bool): Whether to optimize for vLLM compatibility. Defaults to True.
         """
         super().__init__()
         self._api_key = api_key
         self._env_api_key_name = env_api_key_name
         self._env_base_url_name = env_base_url_name
-        self.base_url = base_url or os.getenv(self._env_base_url_name, "https://api.openai.com/v1")
+        # self.base_url = "https://api.proxyapi.ru/openai/v1"
+        self.base_url = "http://10.138.16.219:8666/v1"
         self.sync_client = self.init_sync_client()
         self.async_client = None  # only initialize if the async call is called
         self.chat_completion_parser = (
@@ -186,6 +204,8 @@ class OpenAIClient(ModelClient):
         )
         self._input_type = input_type
         self._api_kwargs = {}  # add api kwargs when the OpenAI Client is called
+        self.force_streaming = force_streaming
+        self.vllm_compatible = vllm_compatible
 
     def init_sync_client(self):
         api_key = self._api_key or os.getenv(self._env_api_key_name)
@@ -292,6 +312,27 @@ class OpenAIClient(ModelClient):
         """
 
         final_model_kwargs = model_kwargs.copy()
+        
+        # Удаляем проблемные для vLLM параметры
+        if self.vllm_compatible and model_type == ModelType.LLM:
+            # Используем импортированный список параметров
+            for param in VLLM_INCOMPATIBLE_PARAMS:
+                final_model_kwargs.pop(param, None)
+            
+            # Обеспечиваем наличие базовых параметров
+            if 'temperature' not in final_model_kwargs:
+                final_model_kwargs['temperature'] = 0.7
+            if 'max_tokens' not in final_model_kwargs:
+                final_model_kwargs['max_tokens'] = 1024
+            
+            # Критическая проверка max_tokens
+            if 'max_tokens' in final_model_kwargs:
+                max_tokens_value = final_model_kwargs['max_tokens']
+                if not isinstance(max_tokens_value, (int, float)) or max_tokens_value < 1:
+                    log.error(f"CRITICAL: Invalid max_tokens detected: {max_tokens_value} (type: {type(max_tokens_value)})")
+                    log.error("Forcing max_tokens to 1024 for vLLM compatibility")
+                    final_model_kwargs['max_tokens'] = 1024
+        
         if model_type == ModelType.EMBEDDER:
             if isinstance(input, str):
                 input = [input]
@@ -342,7 +383,7 @@ class OpenAIClient(ModelClient):
                     else:
                         messages.append({"role": "user", "content": input_str})
             if len(messages) == 0:
-                if images:
+                if images and not self.vllm_compatible:  # vLLM может не поддерживать multimodal
                     content = [{"type": "text", "text": input}]
                     if isinstance(images, (str, dict)):
                         images = [images]
@@ -413,6 +454,22 @@ class OpenAIClient(ModelClient):
         kwargs is the combined input and model_kwargs.  Support streaming call.
         """
         log.info(f"api_kwargs: {api_kwargs}")
+        
+        # Критическая проверка max_tokens в входящих параметрах
+        if 'max_tokens' in api_kwargs:
+            max_tokens_value = api_kwargs['max_tokens']
+            if not isinstance(max_tokens_value, (int, float)) or max_tokens_value < 1:
+                log.error(f"CRITICAL: Invalid max_tokens in api_kwargs: {max_tokens_value} (type: {type(max_tokens_value)})")
+                log.error("This suggests the issue comes from adalflow Generator or earlier in the pipeline")
+                # Исправляем на месте
+                api_kwargs = api_kwargs.copy()
+                api_kwargs['max_tokens'] = 1024
+                log.error("Corrected max_tokens to 1024")
+        
+        # Логируем запрос к vLLM если включена совместимость
+        if self.vllm_compatible and model_type == ModelType.LLM:
+            log_vllm_request(api_kwargs)
+        
         self._api_kwargs = api_kwargs
         if model_type == ModelType.EMBEDDER:
             return self.sync_client.embeddings.create(**api_kwargs)
@@ -421,8 +478,8 @@ class OpenAIClient(ModelClient):
                 log.debug("streaming call")
                 self.chat_completion_parser = handle_streaming_response
                 return self.sync_client.chat.completions.create(**api_kwargs)
-            else:
-                log.debug("non-streaming call converted to streaming")
+            elif self.force_streaming and not self.vllm_compatible:
+                log.debug("non-streaming call converted to streaming (force_streaming=True)")
                 # Make a copy of api_kwargs to avoid modifying the original
                 streaming_kwargs = api_kwargs.copy()
                 streaming_kwargs["stream"] = True
@@ -458,6 +515,10 @@ class OpenAIClient(ModelClient):
                         message=ChatCompletionMessage(content=accumulated_content, role="assistant")
                     )]
                 )
+            else:
+                log.debug("regular non-streaming call (best for vLLM compatibility)")
+                # Обычный не-streaming вызов для лучшей совместимости с vLLM
+                return self.sync_client.chat.completions.create(**api_kwargs)
         elif model_type == ModelType.IMAGE_GENERATION:
             # Determine which image API to call based on the presence of image/mask
             if "image" in api_kwargs:
@@ -493,12 +554,34 @@ class OpenAIClient(ModelClient):
         """
         # store the api kwargs in the client
         self._api_kwargs = api_kwargs
+        
+        # Критическая проверка max_tokens в входящих параметрах
+        if 'max_tokens' in api_kwargs:
+            max_tokens_value = api_kwargs['max_tokens']
+            if not isinstance(max_tokens_value, (int, float)) or max_tokens_value < 1:
+                log.error(f"CRITICAL: Invalid max_tokens in async api_kwargs: {max_tokens_value} (type: {type(max_tokens_value)})")
+                log.error("This suggests the issue comes from adalflow Generator or earlier in the pipeline")
+                # Исправляем на месте
+                api_kwargs = api_kwargs.copy()
+                api_kwargs['max_tokens'] = 1024
+                log.error("Corrected max_tokens to 1024")
+        
+        # Логируем запрос к vLLM если включена совместимость
+        if self.vllm_compatible and model_type == ModelType.LLM:
+            log_vllm_request(api_kwargs)
+            
         if self.async_client is None:
             self.async_client = self.init_async_client()
         if model_type == ModelType.EMBEDDER:
             return await self.async_client.embeddings.create(**api_kwargs)
         elif model_type == ModelType.LLM:
-            return await self.async_client.chat.completions.create(**api_kwargs)
+            if "stream" in api_kwargs and api_kwargs.get("stream", False):
+                log.debug("async streaming call")
+                return await self.async_client.chat.completions.create(**api_kwargs)
+            else:
+                log.debug("async regular non-streaming call (best for vLLM compatibility)")
+                # Обычный не-streaming вызов для лучшей совместимости с vLLM
+                return await self.async_client.chat.completions.create(**api_kwargs)
         elif model_type == ModelType.IMAGE_GENERATION:
             # Determine which image API to call based on the presence of image/mask
             if "image" in api_kwargs:
@@ -523,6 +606,11 @@ class OpenAIClient(ModelClient):
         # recreate the existing clients
         obj.sync_client = obj.init_sync_client()
         obj.async_client = obj.init_async_client()
+        # Восстанавливаем новые атрибуты с дефолтными значениями если они отсутствуют
+        if not hasattr(obj, 'force_streaming'):
+            obj.force_streaming = False
+        if not hasattr(obj, 'vllm_compatible'):
+            obj.vllm_compatible = True
         return obj
 
     def to_dict(self) -> Dict[str, Any]:

@@ -839,11 +839,20 @@ IMPORTANT:
       // Clean up markdown delimiters
       responseText = responseText.replace(/^```(?:xml)?\s*/i, '').replace(/```\s*$/i, '');
 
+      // Отладочное логирование для понимания что мы получили
+      console.log('XML parsing debug:');
+      console.log('Raw response text (first 500 chars):', responseText.substring(0, 500));
+      console.log('Raw response text (last 500 chars):', responseText.substring(Math.max(0, responseText.length - 500)));
+      console.log('Response text length:', responseText.length);
+
       // Extract wiki structure from response
       const xmlMatch = responseText.match(/<wiki_structure>[\s\S]*?<\/wiki_structure>/m);
       if (!xmlMatch) {
+        console.error('No valid XML found in response. Full response:', responseText);
         throw new Error('No valid XML found in response');
       }
+
+      console.log('Found XML match:', xmlMatch[0].substring(0, 200) + '...');
 
       let xmlText = xmlMatch[0];
       xmlText = xmlText.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');

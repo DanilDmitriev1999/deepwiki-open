@@ -478,11 +478,14 @@ This file contains...
                 # We'll let the OpenAIClient handle this and return an error message
 
             # Initialize Openai client
-            model = OpenAIClient()
+            model = OpenAIClient(vllm_compatible=True, force_streaming=False)
             model_kwargs = {
                 "model": request.model,
-                "stream": True,
-                "temperature": model_config["temperature"]
+                # Полностью отключаем streaming для лучшей совместимости с vLLM и XML parsing
+                "stream": False,
+                "temperature": model_config["temperature"],
+                # Увеличиваем max_tokens для полной генерации XML структуры
+                "max_tokens": 8000
             }
             # Only add top_p if it exists in the model config
             if "top_p" in model_config:
@@ -553,17 +556,18 @@ This file contains...
             elif request.provider == "openai":
                 try:
                     # Get the response and handle it properly using the previously created api_kwargs
-                    logger.info("Making Openai API call")
+                    logger.info("Making Openai API call (NON-STREAMING)")
                     response = await model.acall(api_kwargs=api_kwargs, model_type=ModelType.LLM)
-                    # Handle streaming response from Openai
-                    async for chunk in response:
-                        choices = getattr(chunk, "choices", [])
-                        if len(choices) > 0:
-                            delta = getattr(choices[0], "delta", None)
-                            if delta is not None:
-                                text = getattr(delta, "content", None)
-                                if text is not None:
-                                    await websocket.send_text(text)
+                    
+                    # Поскольку мы отключили streaming, response всегда будет ChatCompletion объектом
+                    if hasattr(response, 'choices') and len(response.choices) > 0:
+                        content = response.choices[0].message.content
+                        if content:
+                            # Отправляем весь контент сразу, без streaming
+                            await websocket.send_text(content)
+                    else:
+                        await websocket.send_text(str(response))
+                    
                     # Explicitly close the WebSocket connection after the response is complete
                     await websocket.close()
                 except Exception as e_openai:
@@ -677,10 +681,20 @@ This file contains...
                             logger.info("Making fallback Openai API call")
                             fallback_response = await model.acall(api_kwargs=fallback_api_kwargs, model_type=ModelType.LLM)
 
-                            # Handle streaming fallback_response from Openai
-                            async for chunk in fallback_response:
-                                text = chunk if isinstance(chunk, str) else getattr(chunk, 'text', str(chunk))
-                                await websocket.send_text(text)
+                            # Проверяем тип ответа - streaming или обычный
+                            if hasattr(fallback_response, '__aiter__'):
+                                # Streaming response
+                                async for chunk in fallback_response:
+                                    text = chunk if isinstance(chunk, str) else getattr(chunk, 'text', str(chunk))
+                                    await websocket.send_text(text)
+                            else:
+                                # Обычный ответ от vLLM (ChatCompletion)
+                                if hasattr(fallback_response, 'choices') and len(fallback_response.choices) > 0:
+                                    content = fallback_response.choices[0].message.content
+                                    if content:
+                                        await websocket.send_text(content)
+                                else:
+                                    await websocket.send_text(str(fallback_response))
                         except Exception as e_fallback:
                             logger.error(f"Error with Openai API fallback: {str(e_fallback)}")
                             error_msg = f"\nError with Openai API fallback: {str(e_fallback)}\n\nPlease check that you have set the OPENAI_API_KEY environment variable with a valid API key."

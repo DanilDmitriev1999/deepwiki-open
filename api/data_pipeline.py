@@ -13,9 +13,13 @@ from adalflow.utils import get_adalflow_default_root_path
 from adalflow.core.db import LocalDB
 from api.config import configs, DEFAULT_EXCLUDED_DIRS, DEFAULT_EXCLUDED_FILES
 from api.ollama_patch import OllamaDocumentProcessor
-from urllib.parse import urlparse, urlunparse, quote
+from urllib.parse import urlparse, urlunparse, quote, unquote
 import requests
 from requests.exceptions import RequestException
+import shutil
+import fnmatch
+from urllib.request import urlopen, Request
+from urllib.error import HTTPError, URLError
 
 from api.tools.embedder import get_embedder
 
@@ -686,7 +690,7 @@ class DatabaseManager:
         ~/.adalflow/databases/{owner}_{repo_name}.pkl
 
         Args:
-            repo_url_or_path (str): The URL or local path of the repository
+            repo_url_or_path (str): The URL, local path, or file:// URL of the repository
             access_token (str, optional): Access token for private repositories
         """
         logger.info(f"Preparing repo storage for {repo_url_or_path}...")
@@ -695,8 +699,23 @@ class DatabaseManager:
             root_path = get_adalflow_default_root_path()
 
             os.makedirs(root_path, exist_ok=True)
-            # url
-            if repo_url_or_path.startswith("https://") or repo_url_or_path.startswith("http://"):
+            
+            # Handle file:// protocol URLs
+            if is_file_protocol(repo_url_or_path):
+                local_source_path = convert_file_protocol_to_path(repo_url_or_path)
+                logger.info(f"Converted file:// URL to local path: {local_source_path}")
+                
+                # Extract repo name from the local path
+                repo_name = self._extract_repo_name_from_url(local_source_path, "local")
+                logger.info(f"Extracted repo name from file URL: {repo_name}")
+                
+                save_repo_dir = os.path.join(root_path, "repos", repo_name)
+                
+                # Create symbolic link or copy to the local repository
+                create_local_repo_link(local_source_path, save_repo_dir)
+                
+            # Handle HTTP/HTTPS URLs (remote repositories)
+            elif repo_url_or_path.startswith("https://") or repo_url_or_path.startswith("http://"):
                 # Extract the repository name from the URL
                 repo_name = self._extract_repo_name_from_url(repo_url_or_path, repo_type)
                 logger.info(f"Extracted repo name: {repo_name}")
@@ -709,12 +728,27 @@ class DatabaseManager:
                     download_repo(repo_url_or_path, save_repo_dir, repo_type, access_token)
                 else:
                     logger.info(f"Repository already exists at {save_repo_dir}. Using existing repository.")
+                    
+            # Handle direct local paths
             else:  # local path
-                repo_name = os.path.basename(repo_url_or_path)
-                save_repo_dir = repo_url_or_path
+                # Check if it's an absolute path that should be linked
+                if os.path.isabs(repo_url_or_path) and os.path.exists(repo_url_or_path):
+                    # This is an absolute path to an existing directory - create a link
+                    repo_name = self._extract_repo_name_from_url(repo_url_or_path, "local")
+                    logger.info(f"Creating link for absolute local path: {repo_url_or_path}")
+                    
+                    save_repo_dir = os.path.join(root_path, "repos", repo_name)
+                    create_local_repo_link(repo_url_or_path, save_repo_dir)
+                else:
+                    # This is a relative path or non-existent path - use as-is (legacy behavior)
+                    repo_name = os.path.basename(repo_url_or_path)
+                    save_repo_dir = repo_url_or_path
 
             save_db_file = os.path.join(root_path, "databases", f"{repo_name}.pkl")
-            os.makedirs(save_repo_dir, exist_ok=True)
+            
+            # Only create directories if save_repo_dir is not an existing path
+            if not os.path.exists(save_repo_dir):
+                os.makedirs(save_repo_dir, exist_ok=True)
             os.makedirs(os.path.dirname(save_db_file), exist_ok=True)
 
             self.repo_paths = {
@@ -788,3 +822,92 @@ class DatabaseManager:
             List[Document]: List of Document objects
         """
         return self.prepare_database(repo_url_or_path, type, access_token)
+
+def create_local_repo_link(local_source_path: str, destination_path: str) -> str:
+    """
+    Creates a symbolic link (or copies if symlink fails) from local source to destination.
+    
+    Args:
+        local_source_path (str): The path to the local repository source
+        destination_path (str): The path where the link/copy should be created
+        
+    Returns:
+        str: Success message describing what was done
+    """
+    try:
+        # Ensure the source path exists
+        if not os.path.exists(local_source_path):
+            raise ValueError(f"Source path does not exist: {local_source_path}")
+        
+        if not os.path.isdir(local_source_path):
+            raise ValueError(f"Source path is not a directory: {local_source_path}")
+        
+        # Check if destination already exists
+        if os.path.exists(destination_path):
+            # If it's already a symlink to the correct location, we're done
+            if os.path.islink(destination_path):
+                if os.readlink(destination_path) == local_source_path:
+                    logger.info(f"Symbolic link already exists and points to correct location: {destination_path} -> {local_source_path}")
+                    return f"Using existing symbolic link at {destination_path}"
+                else:
+                    # Remove incorrect symlink
+                    os.unlink(destination_path)
+            elif os.path.isdir(destination_path):
+                # If directory exists and is not empty, remove it
+                if os.listdir(destination_path):
+                    logger.warning(f"Removing existing directory at {destination_path}")
+                    shutil.rmtree(destination_path)
+                else:
+                    os.rmdir(destination_path)
+        
+        # Ensure the parent directory exists
+        os.makedirs(os.path.dirname(destination_path), exist_ok=True)
+        
+        # Try to create symbolic link first
+        try:
+            os.symlink(local_source_path, destination_path)
+            logger.info(f"Created symbolic link: {destination_path} -> {local_source_path}")
+            return f"Created symbolic link to {local_source_path}"
+        except (OSError, NotImplementedError) as e:
+            # Fallback to copying if symlink fails (e.g., on Windows without admin rights)
+            logger.warning(f"Symbolic link creation failed: {e}. Falling back to copying.")
+            shutil.copytree(local_source_path, destination_path)
+            logger.info(f"Copied directory from {local_source_path} to {destination_path}")
+            return f"Copied directory from {local_source_path}"
+            
+    except Exception as e:
+        raise ValueError(f"Failed to create local repository link: {str(e)}")
+
+def is_file_protocol(url_or_path: str) -> bool:
+    """
+    Check if the given string is a file:// protocol URL.
+    
+    Args:
+        url_or_path (str): The URL or path to check
+        
+    Returns:
+        bool: True if it's a file:// protocol URL, False otherwise
+    """
+    return url_or_path.startswith("file://")
+
+def convert_file_protocol_to_path(file_url: str) -> str:
+    """
+    Convert file:// protocol URL to local path.
+    
+    Args:
+        file_url (str): The file:// URL to convert
+        
+    Returns:
+        str: The local path
+    """
+    if not is_file_protocol(file_url):
+        raise ValueError(f"Not a valid file:// URL: {file_url}")
+    
+    # Remove file:// prefix and decode URL encoding
+    path = unquote(file_url[7:])  # Remove 'file://'
+    
+    # Handle Windows paths that might start with /C: format
+    if os.name == 'nt' and path.startswith('/') and len(path) > 3 and path[2] == ':':
+        path = path[1:]  # Remove leading slash for Windows paths like /C:/path
+    
+    return path

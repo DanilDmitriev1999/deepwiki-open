@@ -142,11 +142,24 @@ export default function Home() {
     let owner = '', repo = '', type = 'github', fullPath;
     let localPath: string | undefined;
 
+    // Handle file:// protocol URLs
+    if (input.startsWith('file://')) {
+      type = 'local';
+      // Convert file:// URL to local path
+      localPath = decodeURIComponent(input.slice(7)); // Remove 'file://'
+      
+      // Handle Windows paths that might start with /C: format
+      if (localPath.startsWith('/') && localPath.length > 3 && localPath[2] === ':') {
+        localPath = localPath.slice(1); // Remove leading slash for Windows paths like /C:/path
+      }
+      
+      // Extract repo name from path
+      const pathParts = localPath.split(/[/\\]/).filter(Boolean);
+      repo = pathParts[pathParts.length - 1] || 'local-repo';
+      owner = 'local';
+    }
     // Handle Windows absolute paths (e.g., C:\path\to\folder)
-    const windowsPathRegex = /^[a-zA-Z]:\\(?:[^\\/:*?"<>|\r\n]+\\)*[^\\/:*?"<>|\r\n]*$/;
-    const customGitRegex = /^(?:https?:\/\/)?([^\/]+)\/(.+?)\/([^\/]+)(?:\.git)?\/?$/;
-
-    if (windowsPathRegex.test(input)) {
+    else if (/^[a-zA-Z]:\\(?:[^\\/:*?"<>|\r\n]+\\)*[^\\/:*?"<>|\r\n]*$/.test(input)) {
       type = 'local';
       localPath = input;
       repo = input.split('\\').pop() || 'local-repo';
@@ -159,7 +172,8 @@ export default function Home() {
       repo = input.split('/').filter(Boolean).pop() || 'local-repo';
       owner = 'local';
     }
-    else if (customGitRegex.test(input)) {
+    // Handle remote Git URLs
+    else if (/^(?:https?:\/\/)?([^\/]+)\/(.+?)\/([^\/]+)(?:\.git)?\/?$/.test(input)) {
       type = 'web';
       fullPath = extractUrlPath(input)?.replace(/\.git$/, '');
       const parts = fullPath?.split('/') ?? [];
