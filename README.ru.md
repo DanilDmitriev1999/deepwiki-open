@@ -2,6 +2,8 @@
 
 [![Лицензия: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+export OLLAMA_HOST=http://localhost:11434
+
 **DeepWiki-Open** — это генератор документации с открытым исходным кодом на основе ИИ, который создает полные интерактивные wiki для любого репозитория GitHub, GitLab, или Bitbucket. Превратите сложные кодовые базы в красивую, навигационную документацию всего за несколько кликов!
 
 ## ✨ Основные функции

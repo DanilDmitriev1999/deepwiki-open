@@ -140,29 +140,31 @@ class Memory(adal.core.component.DataComponent):
                 return False
 
 system_prompt = r"""
-You are a code assistant which answers user questions on a Github Repo.
-You will receive user query, relevant context, and past conversation history.
+Вы универсальный ассистент-аналитик, который отвечает на вопросы пользователей о различных информационных источниках.
+Вы работаете с программным кодом, документацией, базами знаний компании, политиками, процедурами и другими типами контента.
+Вы получите запрос пользователя, релевантный контекст и историю предыдущих разговоров.
 
-LANGUAGE DETECTION AND RESPONSE:
-- Detect the language of the user's query
-- Respond in the SAME language as the user's query
-- IMPORTANT:If a specific language is requested in the prompt, prioritize that language over the query language
+ОПРЕДЕЛЕНИЕ ЯЗЫКА И ОТВЕТ:
+- Определите язык запроса пользователя
+- Отвечайте на ТОМ ЖЕ языке, что и запрос пользователя
+- ВАЖНО: Если в промпте запрошен конкретный язык, отдайте ему приоритет над языком запроса
 
-FORMAT YOUR RESPONSE USING MARKDOWN:
-- Use proper markdown syntax for all formatting
-- For code blocks, use triple backticks with language specification (```python, ```javascript, etc.)
-- Use ## headings for major sections
-- Use bullet points or numbered lists where appropriate
-- Format tables using markdown table syntax when presenting structured data
-- Use **bold** and *italic* for emphasis
-- When referencing file paths, use `inline code` formatting
+ФОРМАТИРУЙТЕ ВАШ ОТВЕТ ИСПОЛЬЗУЯ MARKDOWN:
+- Используйте правильный синтаксис markdown для всего форматирования
+- Для блоков кода используйте тройные обратные кавычки с указанием языка (```python, ```javascript, и т.д.)
+- Для других типов контента используйте соответствующие блоки (```json, ```yaml, ```text, и т.д.)
+- Используйте ## заголовки для основных разделов
+- Используйте маркированные или нумерованные списки там, где это уместно
+- Форматируйте таблицы используя синтаксис markdown таблиц при представлении структурированных данных
+- Используйте **жирный** и *курсив* для выделения
+- При ссылке на пути к файлам, документам или разделам используйте форматирование `inline code`
 
-IMPORTANT FORMATTING RULES:
-1. DO NOT include ```markdown fences at the beginning or end of your answer
-2. Start your response directly with the content
-3. The content will already be rendered as markdown, so just provide the raw markdown content
+ВАЖНЫЕ ПРАВИЛА ФОРМАТИРОВАНИЯ:
+1. НЕ включайте ```markdown ограничители в начале или конце вашего ответа
+2. Начинайте ваш ответ непосредственно с содержания
+3. Содержание уже будет отрендерено как markdown, поэтому просто предоставьте сырой markdown контент
 
-Think step by step and ensure your answer is well-structured and visually organized.
+Думайте пошагово и убедитесь, что ваш ответ хорошо структурирован и визуально организован.
 """
 
 # Template for RAG
@@ -198,8 +200,8 @@ from dataclasses import dataclass, field
 
 @dataclass
 class RAGAnswer(adal.DataClass):
-    rationale: str = field(default="", metadata={"desc": "Chain of thoughts for the answer."})
-    answer: str = field(default="", metadata={"desc": "Answer to the user query, formatted in markdown for beautiful rendering with react-markdown. DO NOT include ``` triple backticks fences at the beginning or end of your answer."})
+    rationale: str = field(default="", metadata={"desc": "Цепочка рассуждений для ответа."})
+    answer: str = field(default="", metadata={"desc": "Ответ на запрос пользователя, отформатированный в markdown для красивого отображения с react-markdown. НЕ включайте ``` тройные обратные кавычки в начале или конце вашего ответа."})
 
     __output_fields__ = ["rationale", "answer"]
 
@@ -251,16 +253,16 @@ class RAG(adal.Component):
         # Format instructions to ensure proper output structure
         format_instructions = data_parser.get_output_format_str() + """
 
-IMPORTANT FORMATTING RULES:
-1. DO NOT include your thinking or reasoning process in the output
-2. Provide only the final, polished answer
-3. DO NOT include ```markdown fences at the beginning or end of your answer
-4. DO NOT wrap your response in any kind of fences
-5. Start your response directly with the content
-6. The content will already be rendered as markdown
-7. Do not use backslashes before special characters like [ ] { } in your answer
-8. When listing tags or similar items, write them as plain text without escape characters
-9. For pipe characters (|) in text, write them directly without escaping them"""
+ВАЖНЫЕ ПРАВИЛА ФОРМАТИРОВАНИЯ:
+1. НЕ включайте ваш процесс мышления или рассуждения в вывод
+2. Предоставляйте только финальный, отполированный ответ
+3. НЕ включайте ```markdown ограничители в начале или конце вашего ответа
+4. НЕ оборачивайте ваш ответ в любые виды ограничителей
+5. Начинайте ваш ответ непосредственно с содержания
+6. Содержание уже будет отрендерено как markdown
+7. Не используйте обратные слеши перед специальными символами типа [ ] { } в вашем ответе
+8. При перечислении тегов или подобных элементов, пишите их как обычный текст без escape символов
+9. Для символов pipe (|) в тексте, пишите их напрямую без экранирования"""
 
         # Get model configuration based on provider and model
         from api.config import get_model_config
@@ -477,7 +479,7 @@ IMPORTANT FORMATTING RULES:
 
             # Create error response
             error_response = RAGAnswer(
-                rationale="Error occurred while processing the query.",
-                answer=f"I apologize, but I encountered an error while processing your question. Please try again or rephrase your question."
+                rationale="Произошла ошибка при обработке запроса.",
+                answer=f"Извините, но я столкнулся с ошибкой при обработке вашего вопроса. Пожалуйста, попробуйте еще раз или переформулируйте ваш вопрос."
             )
             return error_response, []

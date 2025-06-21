@@ -349,92 +349,86 @@ export default function RepoWikiPage() {
         const repoUrl = getRepoUrl(effectiveRepoInfo);
 
         // Create the prompt content - simplified to avoid message dialogs
- const promptContent =
-`You are an expert technical writer and software architect.
-Your task is to generate a comprehensive and accurate technical wiki page in Markdown format about a specific feature, system, or module within a given software project.
+        const promptContent =
+`Вы эксперт-аналитик и архитектор информационных систем.
+Ваша задача - создать всеобъемлющую и точную техническую wiki-страницу в формате Markdown о конкретной функции, системе или модуле в рамках данного информационного источника.
 
-You will be given:
-1. The "[WIKI_PAGE_TOPIC]" for the page you need to create.
-2. A list of "[RELEVANT_SOURCE_FILES]" from the project that you MUST use as the sole basis for the content. You have access to the full content of these files. You MUST use AT LEAST 5 relevant source files for comprehensive coverage - if fewer are provided, search for additional related files in the codebase.
+Вам будет предоставлено:
+1. "[ТЕМА_WIKI_СТРАНИЦЫ]" для страницы, которую вы должны создать.
+2. Список "[РЕЛЕВАНТНЫХ_ИСХОДНЫХ_ФАЙЛОВ]" из источника, которые вы ДОЛЖНЫ использовать как единственную основу для контента. У вас есть доступ к полному содержимому этих файлов. Вы ДОЛЖНЫ использовать КАК МИНИМУМ 5 релевантных исходных файлов для всеобъемлющего охвата - если предоставлено меньше, найдите дополнительные связанные файлы в источнике.
 
-CRITICAL STARTING INSTRUCTION:
-The very first thing on the page MUST be a \`<details>\` block listing ALL the \`[RELEVANT_SOURCE_FILES]\` you used to generate the content. There MUST be AT LEAST 5 source files listed - if fewer were provided, you MUST find additional related files to include.
-Format it exactly like this:
+КРИТИЧЕСКИ ВАЖНАЯ НАЧАЛЬНАЯ ИНСТРУКЦИЯ:
+Первое, что должно быть на странице - это блок \`<details>\`, перечисляющий ВСЕ \`[РЕЛЕВАНТНЫЕ_ИСХОДНЫЕ_ФАЙЛЫ]\`, которые вы использовали для генерации контента. Должно быть указано КАК МИНИМУМ 5 исходных файлов - если предоставлено меньше, вы ДОЛЖНЫ найти дополнительные связанные файлы для включения.
+Форматируйте это точно так:
 <details>
-<summary>Relevant source files</summary>
+<summary>Релевантные исходные файлы</summary>
 
-Remember, do not provide any acknowledgements, disclaimers, apologies, or any other preface before the \`<details>\` block. JUST START with the \`<details>\` block.
-The following files were used as context for generating this wiki page:
+Помните, не предоставляйте никаких подтверждений, отказов от ответственности, извинений или любых других предисловий перед блоком \`<details>\`. ПРОСТО НАЧНИТЕ с блока \`<details>\`.
+Следующие файлы были использованы в качестве контекста для генерации этой wiki-страницы:
 
 ${filePaths.map(path => `- [${path}](${path})`).join('\n')}
-<!-- Add additional relevant files if fewer than 5 were provided -->
+<!-- Добавьте дополнительные релевантные файлы, если предоставлено менее 5 -->
 </details>
 
-Immediately after the \`<details>\` block, the main title of the page should be a H1 Markdown heading: \`# ${page.title}\`.
+Сразу после блока \`<details>\` основной заголовок страницы должен быть заголовком H1 Markdown: \`# ${page.title}\`.
 
-Based ONLY on the content of the \`[RELEVANT_SOURCE_FILES]\`:
+Основываясь ТОЛЬКО на содержимом \`[РЕЛЕВАНТНЫХ_ИСХОДНЫХ_ФАЙЛОВ]\`:
 
-1.  **Introduction:** Start with a concise introduction (1-2 paragraphs) explaining the purpose, scope, and high-level overview of "${page.title}" within the context of the overall project. If relevant, and if information is available in the provided files, link to other potential wiki pages using the format \`[Link Text](#page-anchor-or-id)\`.
+1.  **Введение:** Начните с краткого введения (1-2 абзаца), объясняющего назначение, область применения и общий обзор "${page.title}" в контексте всего проекта/источника. При необходимости и наличии информации в предоставленных файлах ссылайтесь на другие потенциальные wiki-страницы, используя формат \`[Текст ссылки](#якорь-страницы-или-id)\`.
 
-2.  **Detailed Sections:** Break down "${page.title}" into logical sections using H2 (\`##\`) and H3 (\`###\`) Markdown headings. For each section:
-    *   Explain the architecture, components, data flow, or logic relevant to the section's focus, as evidenced in the source files.
-    *   Identify key functions, classes, data structures, API endpoints, or configuration elements pertinent to that section.
+2.  **Детальные разделы:** Разбейте "${page.title}" на логические разделы, используя заголовки H2 (\`##\`) и H3 (\`###\`) Markdown. Для каждого раздела:
+    *   Объясните архитектуру, компоненты, поток данных или логику, релевантную фокусу раздела, как это подтверждается в исходных файлах.
+    *   Определите ключевые функции, классы, структуры данных, API endpoints или конфигурационные элементы, относящиеся к этому разделу.
 
-3.  **Mermaid Diagrams:**
-    *   EXTENSIVELY use Mermaid diagrams (e.g., \`flowchart TD\`, \`sequenceDiagram\`, \`classDiagram\`, \`erDiagram\`, \`graph TD\`) to visually represent architectures, flows, relationships, and schemas found in the source files.
-    *   Ensure diagrams are accurate and directly derived from information in the \`[RELEVANT_SOURCE_FILES]\`.
-    *   Provide a brief explanation before or after each diagram to give context.
-    *   CRITICAL: All diagrams MUST follow strict vertical orientation:
-       - Use "graph TD" (top-down) directive for flow diagrams
-       - NEVER use "graph LR" (left-right)
-       - Maximum node width should be 3-4 words
-       - For sequence diagrams:
-         - Start with "sequenceDiagram" directive on its own line
-         - Define ALL participants at the beginning
-         - Use descriptive but concise participant names
-         - Use the correct arrow types:
-           - ->> for request/asynchronous messages
-           - -->> for response messages
-           - -x for failed messages
-         - Include activation boxes using +/- notation
-         - Add notes for clarification using "Note over" or "Note right of"
+3.  **Диаграммы Mermaid:**
+    *   ШИРОКО используйте диаграммы Mermaid (например, \`flowchart TD\`, \`sequenceDiagram\`, \`classDiagram\`, \`erDiagram\`, \`graph TD\`) для визуального представления архитектур, потоков, взаимосвязей и схем, найденных в исходных файлах.
+    *   Убедитесь, что диаграммы точны и непосредственно выведены из информации в \`[РЕЛЕВАНТНЫХ_ИСХОДНЫХ_ФАЙЛАХ]\`.
+    *   Предоставьте краткое объяснение до или после каждой диаграммы для контекста.
+    *   КРИТИЧНО: Все диаграммы ДОЛЖНЫ следовать строгой вертикальной ориентации:
+       - Используйте директиву "graph TD" (сверху вниз) для потоковых диаграмм
+       - НИКОГДА не используйте "graph LR" (слева направо)
+       - Максимальная ширина узла должна быть 3-4 слова
+       - Для диаграмм последовательности:
+         - Начинайте с директивы "sequenceDiagram" на отдельной строке
+         - Определите ВСЕХ участников в начале
+         - Используйте описательные, но краткие имена участников
+         - Используйте правильные типы стрелок:
+           - ->> для запроса/асинхронных сообщений
+           - -->> для ответных сообщений
+           - -x для неудачных сообщений
+         - Включите блоки активации, используя нотацию +/-
+         - Добавьте примечания для пояснения, используя "Note over" или "Note right of"
 
-4.  **Tables:**
-    *   Use Markdown tables to summarize information such as:
-        *   Key features or components and their descriptions.
-        *   API endpoint parameters, types, and descriptions.
-        *   Configuration options, their types, and default values.
-        *   Data model fields, types, constraints, and descriptions.
+4.  **Таблицы:**
+    *   Используйте таблицы Markdown для суммирования информации, такой как:
+        *   Ключевые функции или компоненты и их описания.
+        *   Параметры API endpoints, типы и описания.
+        *   Опции конфигурации, их типы и значения по умолчанию.
+        *   Поля модели данных, типы, ограничения и описания.
 
-5.  **Code Snippets:**
-    *   Include short, relevant code snippets (e.g., Python, Java, JavaScript, SQL, JSON, YAML) directly from the \`[RELEVANT_SOURCE_FILES]\` to illustrate key implementation details, data structures, or configurations.
-    *   Ensure snippets are well-formatted within Markdown code blocks with appropriate language identifiers.
+5.  **Фрагменты контента:**
+    *   Включайте короткие, релевантные фрагменты кода, документов или конфигураций (например, Python, Java, JavaScript, SQL, JSON, YAML, текстовые файлы, политики) непосредственно из \`[РЕЛЕВАНТНЫХ_ИСХОДНЫХ_ФАЙЛОВ]\` для иллюстрации ключевых деталей реализации, структур данных или конфигураций.
+    *   Убедитесь, что фрагменты хорошо отформатированы в блоках кода Markdown с соответствующими идентификаторами языка.
 
-6.  **Source Citations (EXTREMELY IMPORTANT):**
-    *   For EVERY piece of significant information, explanation, diagram, table entry, or code snippet, you MUST cite the specific source file(s) and relevant line numbers from which the information was derived.
-    *   Place citations at the end of the paragraph, under the diagram/table, or after the code snippet.
-    *   Use the exact format: \`Sources: [filename.ext:start_line-end_line]()\` for a range, or \`Sources: [filename.ext:line_number]()\` for a single line. Multiple files can be cited: \`Sources: [file1.ext:1-10](), [file2.ext:5](), [dir/file3.ext]()\` (if the whole file is relevant and line numbers are not applicable or too broad).
-    *   If an entire section is overwhelmingly based on one or two files, you can cite them under the section heading in addition to more specific citations within the section.
-    *   IMPORTANT: You MUST cite AT LEAST 5 different source files throughout the wiki page to ensure comprehensive coverage.
+6.  **Цитирование источников (ЧРЕЗВЫЧАЙНО ВАЖНО):**
+    *   Для КАЖДОЙ части значимой информации, объяснения, диаграммы, записи таблицы или фрагмента кода вы ДОЛЖНЫ цитировать конкретные исходные файлы и релевантные номера строк, из которых была получена информация.
+    *   Размещайте цитирования в конце абзаца, под диаграммой/таблицей или после фрагмента кода.
+    *   Используйте точный формат: \`Источники: [filename.ext:начальная_строка-конечная_строка]()\` для диапазона, или \`Источники: [filename.ext:номер_строки]()\` для одной строки. Можно цитировать несколько файлов: \`Источники: [file1.ext:1-10](), [file2.ext:5](), [dir/file3.ext]()\` (если весь файл релевантен и номера строк не применимы или слишком широки).
+    *   Если целый раздел в основном основан на одном или двух файлах, вы можете цитировать их под заголовком раздела в дополнение к более конкретным цитированиям внутри раздела.
+    *   ВАЖНО: Вы ДОЛЖНЫ цитировать КАК МИНИМУМ 5 различных исходных файлов на протяжении wiki-страницы для обеспечения всеобъемлющего охвата.
 
-7.  **Technical Accuracy:** All information must be derived SOLELY from the \`[RELEVANT_SOURCE_FILES]\`. Do not infer, invent, or use external knowledge about similar systems or common practices unless it's directly supported by the provided code. If information is not present in the provided files, do not include it or explicitly state its absence if crucial to the topic.
+7.  **Техническая точность:** Вся информация должна быть получена ИСКЛЮЧИТЕЛЬНО из \`[РЕЛЕВАНТНЫХ_ИСХОДНЫХ_ФАЙЛОВ]\`. Не делайте выводы, не изобретайте и не используйте внешние знания о похожих системах или общих практиках, если это не поддерживается напрямую предоставленным контентом. Если информация отсутствует в предоставленных файлах, не включайте ее или явно указывайте ее отсутствие, если это критично для темы.
 
-8.  **Clarity and Conciseness:** Use clear, professional, and concise technical language suitable for other developers working on or learning about the project. Avoid unnecessary jargon, but use correct technical terms where appropriate.
+8.  **Ясность и краткость:** Используйте ясный, профессиональный и краткий технический язык, подходящий для других разработчиков или пользователей, работающих с проектом или изучающих его. Избегайте ненужного жаргона, но используйте правильные технические термины там, где это уместно.
 
-9.  **Conclusion/Summary:** End with a brief summary paragraph if appropriate for "${page.title}", reiterating the key aspects covered and their significance within the project.
+9.  **Заключение/Резюме:** Завершите кратким резюмирующим абзацем, если это уместно для "${page.title}", повторив ключевые аспекты, рассмотренные в тексте, и их значение в рамках источника/проекта.
 
-IMPORTANT: Generate the content in ${language === 'en' ? 'English' :
-            language === 'ja' ? 'Japanese (日本語)' :
-            language === 'zh' ? 'Mandarin Chinese (中文)' :
-            language === 'zh-tw' ? 'Traditional Chinese (繁體中文)' :
-            language === 'es' ? 'Spanish (Español)' :
-            language === 'kr' ? 'Korean (한국어)' :
-            language === 'vi' ? 'Vietnamese (Tiếng Việt)' : 'English'} language.
+ВАЖНО: Генерируйте контент на русском языке.
 
-Remember:
-- Ground every claim in the provided source files.
-- Prioritize accuracy and direct representation of the code's functionality and structure.
-- Structure the document logically for easy understanding by other developers.
+Помните:
+- Обосновывайте каждое утверждение предоставленными исходными файлами.
+- Отдавайте приоритет точности и прямому представлению функциональности и структуры контента.
+- Структурируйте документ логично для легкого понимания другими разработчиками или пользователями.
 `;
 
         // Prepare request body
@@ -620,58 +614,56 @@ Remember:
         type: effectiveRepoInfo.type,
         messages: [{
           role: 'user',
-content: `Analyze this GitHub repository ${owner}/${repo} and create a wiki structure for it.
+          // в контенте можно изменить язык, параметр есть, но я захардкодил
+content: `Проанализируйте информационный источник ${owner}/${repo} и создайте для него структуру wiki.
 
-1. The complete file tree of the project:
+1. Полное дерево файлов и структура источника:
 <file_tree>
 ${fileTree}
 </file_tree>
 
-2. The README file of the project:
+2. README файл или описание источника:
 <readme>
 ${readme}
 </readme>
 
-I want to create a wiki for this repository. Determine the most logical structure for a wiki based on the repository's content.
+Я хочу создать wiki для данного источника информации. Определите наиболее логичную структуру wiki на основе содержимого источника. Источник может содержать различные типы контента: программный код, техническую документацию, базы знаний компании, политики и процедуры, руководства пользователя, организационные документы и другие информационные ресурсы.
 
-IMPORTANT: The wiki content will be generated in ${language === 'en' ? 'English' :
-            language === 'ja' ? 'Japanese (日本語)' :
-            language === 'zh' ? 'Mandarin Chinese (中文)' :
-            language === 'zh-tw' ? 'Traditional Chinese (繁體中文)' :
-            language === 'es' ? 'Spanish (Español)' :
-            language === 'kr' ? 'Korean (한国語)' :
-            language === 'vi' ? 'Vietnamese (Tiếng Việt)' : 'English'} language.
+ВАЖНО: Контент wiki будет сгенерирован на русском языке.
 
-When designing the wiki structure, include pages that would benefit from visual diagrams, such as:
-- Architecture overviews
-- Data flow descriptions
-- Component relationships
-- Process workflows
-- State machines
-- Class hierarchies
+При проектировании структуры wiki включайте страницы, которые выиграют от визуальных диаграмм, таких как:
+- Обзоры архитектуры и организационной структуры
+- Схемы потоков данных и информационных процессов
+- Взаимосвязи компонентов, отделов или процессов
+- Диаграммы рабочих процессов и процедур
+- Схемы состояний и жизненных циклов
+- Иерархии классов, должностей или категорий
+- Организационные структуры и подчиненность
+- Временные диаграммы и планы
 
 ${isComprehensiveView ? `
-Create a structured wiki with the following main sections:
-- Overview (general information about the project)
-- System Architecture (how the system is designed)
-- Core Features (key functionality)
-- Data Management/Flow: If applicable, how data is stored, processed, accessed, and managed (e.g., database schema, data pipelines, state management).
-- Frontend Components (UI elements, if applicable.)
-- Backend Systems (server-side components)
-- Model Integration (AI model connections)
-- Deployment/Infrastructure (how to deploy, what's the infrastructure like)
-- Extensibility and Customization: If the project architecture supports it, explain how to extend or customize its functionality (e.g., plugins, theming, custom modules, hooks).
+Создайте структурированную wiki со следующими основными разделами (адаптируйте под тип контента):
 
-Each section should contain relevant pages. For example, the "Frontend Components" section might include pages for "Home Page", "Repository Wiki Page", "Ask Component", etc.
+- Обзор (общая информация об источнике, проекте или организации)
+- Архитектура/Структура (как устроена система, организация или процесс)
+- Основные функции/Процессы (ключевая функциональность, основные процедуры или операции)
+- Управление данными/Информацией: Если применимо, как данные хранятся, обрабатываются, используются и управляются (схемы БД, потоки данных, документооборот, информационные потоки, системы учета)
+- Пользовательские интерфейсы/Взаимодействие (UI элементы, пользовательские процедуры, интерфейсы взаимодействия)
+- Внутренние системы/Backend (серверные компоненты, внутренние процессы организации, техническая инфраструктура)
+- Интеграции/Связи (подключения к внешним системам, API, интеграции с другими процессами или партнерами)
+- Развертывание/Внедрение (как развернуть систему, внедрить процедуры, организовать инфраструктуру)
+- Расширяемость и настройка (как расширить или настроить функциональность, процедуры адаптации, возможности кастомизации)
 
-Return your analysis in the following XML format:
+Каждый раздел должен содержать релевантные страницы. Например, раздел "Пользовательские интерфейсы" может включать страницы "Главная страница", "Страница wiki репозитория", "Панель управления", и т.д.
+
+Верните анализ в следующем XML формате:
 
 <wiki_structure>
-  <title>[Overall title for the wiki]</title>
-  <description>[Brief description of the repository]</description>
+  <title>[Общий заголовок для wiki]</title>
+  <description>[Краткое описание источника/проекта/организации]</description>
   <sections>
     <section id="section-1">
-      <title>[Section title]</title>
+      <title>[Название раздела]</title>
       <pages>
         <page_ref>page-1</page_ref>
         <page_ref>page-2</page_ref>
@@ -680,63 +672,64 @@ Return your analysis in the following XML format:
         <section_ref>section-2</section_ref>
       </subsections>
     </section>
-    <!-- More sections as needed -->
+    <!-- Дополнительные разделы по необходимости -->
   </sections>
   <pages>
     <page id="page-1">
-      <title>[Page title]</title>
-      <description>[Brief description of what this page will cover]</description>
+      <title>[Название страницы]</title>
+      <description>[Краткое описание того, что будет освещено на этой странице]</description>
       <importance>high|medium|low</importance>
       <relevant_files>
-        <file_path>[Path to a relevant file]</file_path>
-        <!-- More file paths as needed -->
+        <file_path>[Путь к релевантному файлу или документу]</file_path>
+        <!-- Дополнительные пути к файлам по необходимости -->
       </relevant_files>
       <related_pages>
         <related>page-2</related>
-        <!-- More related page IDs as needed -->
+        <!-- Дополнительные ID связанных страниц по необходимости -->
       </related_pages>
       <parent_section>section-1</parent_section>
     </page>
-    <!-- More pages as needed -->
+    <!-- Дополнительные страницы по необходимости -->
   </pages>
 </wiki_structure>
 ` : `
-Return your analysis in the following XML format:
+Верните анализ в следующем XML формате:
 
 <wiki_structure>
-  <title>[Overall title for the wiki]</title>
-  <description>[Brief description of the repository]</description>
+  <title>[Общий заголовок для wiki]</title>
+  <description>[Краткое описание источника/проекта/организации]</description>
   <pages>
     <page id="page-1">
-      <title>[Page title]</title>
-      <description>[Brief description of what this page will cover]</description>
+      <title>[Название страницы]</title>
+      <description>[Краткое описание того, что будет освещено на этой странице]</description>
       <importance>high|medium|low</importance>
       <relevant_files>
-        <file_path>[Path to a relevant file]</file_path>
-        <!-- More file paths as needed -->
+        <file_path>[Путь к релевантному файлу или документу]</file_path>
+        <!-- Дополнительные пути к файлам по необходимости -->
       </relevant_files>
       <related_pages>
         <related>page-2</related>
-        <!-- More related page IDs as needed -->
+        <!-- Дополнительные ID связанных страниц по необходимости -->
       </related_pages>
     </page>
-    <!-- More pages as needed -->
+    <!-- Дополнительные страницы по необходимости -->
   </pages>
 </wiki_structure>
 `}
 
-IMPORTANT FORMATTING INSTRUCTIONS:
-- Return ONLY the valid XML structure specified above
-- DO NOT wrap the XML in markdown code blocks (no \`\`\` or \`\`\`xml)
-- DO NOT include any explanation text before or after the XML
-- Ensure the XML is properly formatted and valid
-- Start directly with <wiki_structure> and end with </wiki_structure>
+ВАЖНЫЕ ИНСТРУКЦИИ ПО ФОРМАТИРОВАНИЮ:
+- Верните ТОЛЬКО валидную XML структуру, указанную выше
+- НЕ оборачивайте XML в markdown блоки кода (никаких \`\`\` или \`\`\`xml)
+- НЕ включайте никакого пояснительного текста до или после XML
+- Убедитесь, что XML правильно отформатирован и валиден
+- Начинайте прямо с <wiki_structure> и заканчивайте </wiki_structure>
 
-IMPORTANT:
-1. Create ${isComprehensiveView ? '8-12' : '4-6'} pages that would make a ${isComprehensiveView ? 'comprehensive' : 'concise'} wiki for this repository
-2. Each page should focus on a specific aspect of the codebase (e.g., architecture, key features, setup)
-3. The relevant_files should be actual files from the repository that would be used to generate that page
-4. Return ONLY valid XML with the structure specified above, with no markdown code block delimiters`
+ВАЖНО:
+1. Создайте ${isComprehensiveView ? '8-12' : '4-6'} страниц, которые составят ${isComprehensiveView ? 'всеобъемлющую' : 'краткую'} wiki для данного источника
+2. Каждая страница должна фокусироваться на конкретном аспекте содержимого (техническая архитектура, ключевые функции, процедуры, политики, руководства и т.д.)
+3. relevant_files должны быть реальными файлами или документами из источника, которые будут использоваться для генерации этой страницы
+4. Верните ТОЛЬКО валидный XML со структурой, указанной выше, без markdown ограничителей блоков кода
+5. Адаптируйте структуру под тип контента: для программного кода - технические аспекты, для документации - логические разделы, для процедур - этапы и правила, для организационных документов - структуру и процессы`
         }]
       };
 
@@ -759,7 +752,7 @@ IMPORTANT:
         await new Promise<void>((resolve, reject) => {
           // Set up event handlers
           ws.onopen = () => {
-            console.log('WebSocket connection established for wiki structure');
+            console.log('WebSocket connection established for wiki structure determination');
             // Send the request as JSON
             ws.send(JSON.stringify(requestBody));
             resolve();
@@ -778,7 +771,7 @@ IMPORTANT:
           // Clear the timeout if the connection opens successfully
           ws.onopen = () => {
             clearTimeout(timeout);
-            console.log('WebSocket connection established for wiki structure');
+            console.log('WebSocket connection established for wiki structure determination');
             // Send the request as JSON
             ws.send(JSON.stringify(requestBody));
             resolve();
